@@ -153,7 +153,7 @@ function getStatus(t){
   if(diff > 0 && diff <= 3600000) return {cls:"soon", text:"Soon"};
   if(diff <= 0 && diff >= -3600000) return {cls:"ready", text:"Ready"};
   if(diff < -3600000) return {cls:"completed", text:"Completed"};
-  return {cls:"delay", text:"Delayed"};
+  return {cls:"delay", text:"Start Later"};
 }
 
 /* ===== MAIN ===== */
