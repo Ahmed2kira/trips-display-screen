@@ -176,40 +176,53 @@ async function loadData(){
     };
   }).filter(Boolean);
 
-  const readyAll  = trips.filter(t=>t.status.cls==="ready");
-  const activeAll = trips.filter(t=>["soon","delay"].includes(t.status.cls));
+ // ===== تقسيم الرحلات =====
+const readyAll  = trips.filter(t => t.status.cls === "ready");
+const activeAll = trips.filter(t => ["soon","delay"].includes(t.status.cls));
 
-  // حساب شريحة الرحلات الجاهزة
-  let readySlice = [];
-  if(readyAll.length){
-    for(let i=0;i<READY_SLOTS;i++){
-      readySlice.push(readyAll[(readyIndex + i) % readyAll.length]);
-    }
-    readyIndex = (readyIndex + READY_SLOTS) % readyAll.length;
+// ==== READY (بدون تكرار) ====
+let readySlice = [];
+if (readyAll.length <= READY_SLOTS) {
+  readySlice = readyAll;
+} else {
+  readySlice = readyAll.slice(readyIndex, readyIndex + READY_SLOTS);
+  if (readySlice.length < READY_SLOTS) {
+    readySlice = readySlice.concat(
+      readyAll.slice(0, READY_SLOTS - readySlice.length)
+    );
   }
+  readyIndex = (readyIndex + READY_SLOTS) % readyAll.length;
+}
 
-  // حساب شريحة الرحلات المتغيرة
-  let activeSlice = [];
-  if(activeAll.length){
-    for(let i=0;i<ACTIVE_SLOTS;i++){
-      activeSlice.push(activeAll[(activeIndex + i) % activeAll.length]);
-    }
-    activeIndex = (activeIndex + ACTIVE_SLOTS) % activeAll.length;
+// ==== ACTIVE (بدون تكرار) ====
+let activeSlice = [];
+if (activeAll.length <= ACTIVE_SLOTS) {
+  activeSlice = activeAll;
+} else {
+  activeSlice = activeAll.slice(activeIndex, activeIndex + ACTIVE_SLOTS);
+  if (activeSlice.length < ACTIVE_SLOTS) {
+    activeSlice = activeSlice.concat(
+      activeAll.slice(0, ACTIVE_SLOTS - activeSlice.length)
+    );
   }
+  activeIndex = (activeIndex + ACTIVE_SLOTS) % activeAll.length;
+}
 
-  tbody.innerHTML = "";
-  [...readySlice, ...activeSlice].forEach(t=>{
-    tbody.innerHTML += `
-      <tr class="${t.status.cls}">
-        <td>${t.time}</td>
-        <td>${t.hotel}</td>
-        <td>${t.room}</td>
-        <td>${t.pax}</td>
-        <td>${t.nat}</td>
-        <td>${t.trip}</td>
-        <td>${t.status.text} ${t.status.cls==="ready" ? '<i class="fa-solid fa-bell"></i>' : ''}</td>
-      </tr>`;
-  });
+// ===== العرض =====
+tbody.innerHTML = "";
+[...readySlice, ...activeSlice].forEach(t => {
+  tbody.innerHTML += `
+    <tr class="${t.status.cls}">
+      <td>${t.time}</td>
+      <td>${t.hotel}</td>
+      <td>${t.room}</td>
+      <td>${t.pax}</td>
+      <td>${t.nat}</td>
+      <td>${t.trip}</td>
+      <td>${t.status.text} ${t.status.cls==="ready" ? '<i class="fa-solid fa-bell"></i>' : ''}</td>
+    </tr>`;
+});
+
 }
 
 setInterval(loadData, 10000);
