@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Trips Display Screen</title>
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+
+<style>
+body {
+  margin: 0;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  background: #f0f4f8;
+}
+
+/* ===== HEADER ===== */
+header {
+  background: #fff;
+  padding: 20px 40px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+  display: flex;
+  justify-content: center;
+  position: relative;
+}
+
+.logo {
+  position: absolute;
+  left: 40px;
+  top: 10px;
+  max-height: 90px;
+}
+
+.title h2 {
+  margin: 0;
+  font-size: 36px;
+  color: #1a73e8;
+}
+
+.datetime {
+  margin-top: 5px;
+  font-size: 18px;
+  color: #555;
+}
+
+/* ===== TABLE ===== */
+table {
+  width: 95%;
+  margin: 30px auto;
+  border-collapse: separate;
+  border-spacing: 12px;
+}
+
+thead th {
+  background: #1a73e8;
+  color: white;
+  padding: 18px;
+  font-size: 18px;
+  border-radius: 10px;
+}
+
+tbody td {
+  background: #fff;
+  padding: 16px;
+  font-size: 17px;
+  font-weight: bold;
+  border-radius: 10px;
+  text-align: center;
+}
+
+/* ===== STATUS COLORS ===== */
+.ready td:last-child { background:#27ae60; color:#fff; }
+.soon td:last-child { background:#f39c12; color:#fff; }
+.delay td:last-child { background:#e74c3c; color:#fff; }
+.completed td:last-child { background:#353070; color:#fff; }
+
+/* ===== READY PULSE ===== */
+@keyframes readyPulse {
+  0%   { box-shadow: 0 0 0 rgba(39,174,96,0); }
+  50%  { box-shadow: 0 0 18px rgba(39,174,96,.9); }
+  100% { box-shadow: 0 0 0 rgba(39,174,96,0); }
+}
+
+.ready td {
+  animation: readyPulse 2s infinite ease-in-out;
+}
+
+/* ===== ROW FADE ===== */
+@keyframes fadeIn {
+  from { opacity:0; transform:translateY(10px); }
+  to   { opacity:1; transform:translateY(0); }
+}
+
+tbody tr {
+  animation: fadeIn .5s ease-in-out;
+}
+</style>
+</head>
+
+<body>
+
+<header>
+  <img src="1-removebg-preview.png" class="logo">
+  <div class="title">
+    <h2>Trips Display Screen</h2>
+    <div class="datetime">
+      <span id="clock"></span> | <span id="date"></span>
+    </div>
+  </div>
+</header>
+
+<table>
+<thead>
+<tr>
+  <th>Time</th>
+  <th>Hotel</th>
+  <th>Room</th>
+  <th>Pax</th>
+  <th>NAT</th>
+  <th>Trip</th>
+  <th>Status</th>
+</tr>
+</thead>
+<tbody id="data"></tbody>
+</table>
+
+<script>
+const SHEET_URL = "https://docs.google.com/spreadsheets/d/1-yQ7FJSoaJ2LJQ2Sn1tbd0eWfo5YXZiGY_Ki7ybF4i8/gviz/tq?tqx=out:json";
+
+const tbody = document.getElementById("data");
+
+const READY_SLOTS = 3;
+const ACTIVE_SLOTS = 3;
+
+let readyIndex = 0;
+let activeIndex = 0;
+
+/* ===== HELPERS ===== */
+function parseSheetTime(cell){
+  if(!cell) return null;
+  if(cell.v instanceof Date) return cell.v;
+  const str = cell.f || cell.v;
+  const d = new Date(`1970-01-01 ${str}`);
+  return isNaN(d) ? null : d;
+}
+
+function getStatus(t){
+  const now = new Date();
+  let trip = new Date(now);
+  trip.setHours(t.getHours(), t.getMinutes(), 0);
+  if(trip - now < -12*3600000) trip.setDate(trip.getDate()+1);
+  const diff = trip - now;
+
+  if(diff > 0 && diff <= 3600000) return {cls:"soon", text:"Soon"};
+  if(diff <= 0 && diff >= -3600000) return {cls:"ready", text:"Ready"};
+  if(diff < -3600000) return {cls:"completed", text:"Completed"};
+  return {cls:"delay", text:"Delayed"};
+}
+
+/* ===== MAIN ===== */
+async function loadData(){
+  const res = await fetch(SHEET_URL);
+  const txt = await res.text();
+  const json = JSON.parse(txt.substring(47).slice(0,-2));
+
+  const trips = json.table.rows.map(r=>{
+    const timeObj = parseSheetTime(r.c[0]);
+    if(!timeObj) return null;
+    return {
+      time: timeObj.toLocaleTimeString("en-US",{hour:"numeric",minute:"2-digit"}),
+      hotel: r.c[1]?.v || "",
+      room: r.c[2]?.v || "",
+      pax: r.c[3]?.v || "",
+      nat: r.c[4]?.v || "",
+      trip: r.c[5]?.v || "",
+      status: getStatus(timeObj)
+    };
+  }).filter(Boolean);
+
+  const readyAll  = trips.filter(t=>t.status.cls==="ready");
+  const activeAll = trips.filter(t=>["soon","delay"].includes(t.status.cls));
+
+  // حساب شريحة الرحلات الجاهزة
+  let readySlice = [];
+  if(readyAll.length){
+    for(let i=0;i<READY_SLOTS;i++){
+      readySlice.push(readyAll[(readyIndex + i) % readyAll.length]);
+    }
+    readyIndex = (readyIndex + READY_SLOTS) % readyAll.length;
+  }
+
+  // حساب شريحة الرحلات المتغيرة
+  let activeSlice = [];
+  if(activeAll.length){
+    for(let i=0;i<ACTIVE_SLOTS;i++){
+      activeSlice.push(activeAll[(activeIndex + i) % activeAll.length]);
+    }
+    activeIndex = (activeIndex + ACTIVE_SLOTS) % activeAll.length;
+  }
+
+  tbody.innerHTML = "";
+  [...readySlice, ...activeSlice].forEach(t=>{
+    tbody.innerHTML += `
+      <tr class="${t.status.cls}">
+        <td>${t.time}</td>
+        <td>${t.hotel}</td>
+        <td>${t.room}</td>
+        <td>${t.pax}</td>
+        <td>${t.nat}</td>
+        <td>${t.trip}</td>
+        <td>${t.status.text} ${t.status.cls==="ready" ? '<i class="fa-solid fa-bell"></i>' : ''}</td>
+      </tr>`;
+  });
+}
+
+setInterval(loadData, 10000);
+loadData();
+
+/* ===== CLOCK ===== */
+function updateClock(){
+  const n = new Date();
+  clock.innerText = n.toLocaleTimeString("en-US",{hour:"numeric",minute:"2-digit",second:"2-digit"});
+  date.innerText = n.toLocaleDateString("en-US",{weekday:"long",month:"long",day:"numeric"});
+}
+setInterval(updateClock,1000);
+updateClock();
+</script>
+
+</body>
+</html>
